@@ -40,7 +40,6 @@ def upload_file_to_s3(file_obj, filename):
         logger.error(f"Error uploading file to S3: {e}")
         return False
 
-
 def test_upload():
     with open('test.txt','rb') as file:
         success = upload_file_to_s3(file, 'test.txt')
@@ -49,3 +48,27 @@ def test_upload():
             logger.info("File uploaded successfully!")
         else:
             logger.error("File upload failed")
+            
+def list_files_in_s3():
+    s3_client = get_s3_client()
+    try:
+        response = s3_client.list_objects_v2(
+            Bucket = settings.AWS_STORAGE_BUCKET_NAME,
+            Prefix='uploads/'
+        )
+        files=[]
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                 # Remove the 'uploads/' prefix for display
+                filename = obj['Key'].replace('uploads/','',1)
+                if filename:
+                    files.append({
+                        'filename': filename,
+                        'size': obj['Size'],
+                        'last_modified': obj['LastModified']
+                    })
+        logger.info(f'Successfully listed {len(files)} files from the S3 bucket')
+        return files
+    except ClientError as e: 
+        logger.error(f'Error listing the files in S3: {e}')
+        return []
