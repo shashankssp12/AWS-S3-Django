@@ -113,4 +113,17 @@ def test_create_download_link():
     except Exception as e:
         logger.error(f"Error in test_create_download_link: {e}")
         return None
-    
+
+def delete_file_from_s3(filename):
+    """Delete a file from S3 bucket"""
+    s3_client = get_s3_client()
+    try:
+        s3_client.delete_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=f"uploads/{filename}"
+        )
+        logger.info(f"Successfully deleted file: {filename}")
+        return True
+    except ClientError as e:
+        logger.error(f"Error deleting file from S3: {e}")
+        return False
