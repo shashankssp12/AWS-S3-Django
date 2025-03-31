@@ -6,12 +6,15 @@ This repository documents my learning journey with AWS S3 services through visua
 
 The goal is to build a visual reference that makes S3 concepts more accessible and easier to understand, both for my own learning and potentially for others working with AWS S3 services.
 
+## Got to know: 
+- "Params" means parameters
+
+
 ## S3 API Visualizations + General Concepts
 
 ![Flow](resources/imgs/interactioinflow.png)
 *Description: request-response cycle*
 
-resources/imgs/
 ![Flow](resources/imgs/visualizeS3response.png)
 *Description: Proper visualization*
 

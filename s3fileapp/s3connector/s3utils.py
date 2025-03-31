@@ -71,4 +71,46 @@ def list_files_in_s3():
         return files
     except ClientError as e: 
         logger.error(f'Error listing the files in S3: {e}')
-        return []
+        return []  
+    
+def create_download_link(filename):
+    """Generate a presigned URL for downloading a file"""
+    s3_client = get_s3_client()
+    try:
+        # Generate a presigned URL that expires in 3600 seconds (1 hour)
+        response = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                'Key': f"uploads/{filename}"
+            },
+            ExpiresIn=3600
+        )
+        logger.info(f"Generated presigned URL for {filename}")
+        return response
+    except ClientError as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        return None
+
+def test_create_download_link():
+    """Test function for creating and verifying download links"""
+    try:
+        # First, list all files to see what's available
+        files = list_files_in_s3()
+        logger.info(f"Available files: {[f['filename'] for f in files]}")
+        
+        # Choose a file from the list and create a download link
+        if files:
+            filename = files[0]['filename']  # Get the first file
+            download_url = create_download_link(filename)
+            logger.info(f"Download link for {filename}:")
+            logger.info(download_url)
+            logger.info("This link will work for 1 hour")
+            return download_url
+        else:
+            logger.warning("No files found in the bucket")
+            return None
+    except Exception as e:
+        logger.error(f"Error in test_create_download_link: {e}")
+        return None
+    
