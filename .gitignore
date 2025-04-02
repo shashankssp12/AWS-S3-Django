@@ -34,3 +34,5 @@ ENV/
 .env/
 .ENV/
 *.env
+
+resources/test-uploads/

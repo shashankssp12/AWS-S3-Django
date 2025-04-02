@@ -2,7 +2,7 @@ import boto3 # Amazon's official Python package for working with AWS services
 from django.conf import settings
 from botocore.exceptions import ClientError # Catch AWS specific errors
 import logging
-
+import os
 logger = logging.getLogger(__name__) 
 
 def get_s3_client():
@@ -40,14 +40,65 @@ def upload_file_to_s3(file_obj, filename):
         logger.error(f"Error uploading file to S3: {e}")
         return False
 
-def test_upload():
-    with open('test.txt','rb') as file:
-        success = upload_file_to_s3(file, 'test.txt')
+
+
+def test_upload_multiple_files():
+    """Test uploading multiple files of different types from the test-uploads folder"""
+    # Get the current working directory (where manage.py is)
+    current_dir = os.getcwd()
+    
+    # Go up one level to the parent directory
+    parent_dir = os.path.dirname(current_dir)
+    
+    # Path to your uploads folder
+    upload_folder = os.path.join(parent_dir, 'resources', 'test-uploads')
+    
+    # Check if folder exists
+    if not os.path.exists(upload_folder):
+        logger.error(f"Folder {upload_folder} does not exist")
+        return False
+    
+    # Get list of files in the folder
+    files = os.listdir(upload_folder)
+    logger.info(f"Found {len(files)} files in {upload_folder}")
+    
+    # Track success/failure
+    successful = []
+    failed = []
+    
+    # Try to upload each file
+    for filename in files:
+        # Get the full path to the file
+        file_path = os.path.join(upload_folder, filename)
         
-        if success:
-            logger.info("File uploaded successfully!")
-        else:
-            logger.error("File upload failed")
+        # Skip directories
+        if os.path.isdir(file_path):
+            continue
+        
+        # Open and upload the file
+        try:
+            with open(file_path, 'rb') as file_obj:
+                logger.info(f"Attempting to upload {filename}")
+                success = upload_file_to_s3(file_obj, filename)
+                
+                if success:
+                    successful.append(filename)
+                    logger.info(f"Successfully uploaded {filename}")
+                else:
+                    failed.append(filename)
+                    logger.error(f"Failed to upload {filename}")
+        except Exception as e:
+            failed.append(filename)
+            logger.error(f"Error uploading {filename}: {e}")
+    
+    # Summary
+    logger.info(f"Upload test complete. {len(successful)} successful, {len(failed)} failed")
+    logger.info(f"Successful uploads: {successful}")
+    if failed:
+        logger.warning(f"Failed uploads: {failed}")
+    
+    # Return True if all uploads were successful
+    return len(failed) == 0
             
 def list_files_in_s3():
     s3_client = get_s3_client()
