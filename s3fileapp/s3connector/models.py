@@ -59,3 +59,31 @@ class File(models.Model):
         """Generate a download URL for this file"""
         from s3connector.s3utils import create_download_link
         return create_download_link(self.s3_key)
+    
+class FilePermission(models.Model):
+    PERMISSION_CHOICES = [
+        ('private', 'Private'),
+        ('public', 'Public'),
+        ('shared', 'Shared with specific users')
+    ]
+    
+    file = models.OneToOneField(File, on_delete=models.CASCADE, related_name='permission')
+    permission_type = models.CharField(max_length=10, choices=PERMISSION_CHOICES, default='private')
+    shared_users = models.ManyToManyField(User, blank=True, related_name='shared_files')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def can_access(self, user):
+        """Check if a user can access this file"""
+        # Owner always has access
+        if user == self.file.owner:
+            return True
+            
+        # Check based on permission type
+        if self.permission_type == 'public':
+            return True
+        elif self.permission_type == 'shared':
+            return user in self.shared_users.all()
+            
+        # Private - only owner can access
+        return False
