@@ -212,57 +212,7 @@ class S3Uploader:
             error_message = f"Error uploading large file: {str(e)}"
             self.logger.error(error_message)
             return {"success": False, "message": error_message}
-        """
-        Upload a file to S3
-        
-        Args:
-            file_obj: The file object to upload
-            filename: Name to give the file in S3
-            folder: Folder path in the bucket
-            max_size_mb: Maximum file size in MB
-            
-        Returns:
-            dict: Upload result with success status and message
-        """
-        # Check file size
-        size_ok, error_message = self._check_file_size(file_obj, max_size_mb)
-        if not size_ok:
-            self.logger.error(error_message)
-            return {"success": False, "message": error_message}
-        
-        # Get content type
-        content_type = self._get_content_type(filename)
-        
-        # Create object key (path in S3)
-        object_key = f"{folder}/{filename}"
-        
-        try:
-            # Upload the file with content type
-            self.s3_client.upload_fileobj(
-                file_obj,
-                self.bucket_name,
-                object_key,
-                ExtraArgs={'ContentType': content_type}
-            )
-            
-            success_message = f"Successfully uploaded {filename}"
-            self.logger.info(success_message)
-            
-            return {
-                "success": True,
-                "message": success_message,
-                "file_info": {
-                    "key": object_key,
-                    "content_type": content_type
-                }
-            }
-            
-        except ClientError as e:
-            error_message = f"Error uploading file to S3: {e}"
-            self.logger.error(error_message)
-            return {"success": False, "message": error_message}
-    
-
+       
             
 def list_files_in_s3():
     s3_client = get_s3_client()
