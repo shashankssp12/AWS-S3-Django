@@ -31,3 +31,31 @@ class Folder(models.Model):
         if self.parent:
             return f"{self.parent.get_path()}/{self.name}"
         return self.name
+    
+    
+class File(models.Model):
+    CATEGORY_CHOICES = [
+        ('image', 'Image'),
+        ('document', 'Document'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('other', 'Other'),
+    ]
+    
+    name = models.CharField(max_length=255)
+    original_name = models.CharField(max_length=255)  # Original filename before deduplication
+    s3_key = models.CharField(max_length=1024)  # Full path in S3
+    size = models.BigIntegerField()  # Size in bytes
+    content_type = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files')
+    folder = models.ForeignKey(Folder, on_delete=models.SET_NULL, null=True, blank=True, related_name='files')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name
+    
+    def get_download_url(self):
+        """Generate a download URL for this file"""
+        from s3connector.s3utils import create_download_link
+        return create_download_link(self.s3_key)
