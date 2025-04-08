@@ -45,7 +45,164 @@ def logout_view(request):
     messages.info(request, "You have been logged out.")
     return redirect('login')
     
+
+# Dashboard Views
+@login_required
+def dashboard_view(request):
+    """Display user dashboard with storage usage and files"""
+    # Get user profile for storage info
+    profile = request.user.profile
+    used_storage = profile.get_used_storage()
+    total_storage = profile.storage_quota
+    storage_percentage = (used_storage / total_storage) * 100 if total_storage > 0 else 0
     
+    # Get user's files and folders
+    files = request.user.files.all().order_by('-uploaded_at')
+    folders = request.user.folders.filter(parent=None).order_by('name')
     
-    # def login(request):
-# def logout(request):
+    context = {
+        'files': files,
+        'folders': folders,
+        'used_storage': used_storage,
+        'total_storage': total_storage,
+        'storage_percentage': storage_percentage,
+    }
+    return render(request, 's3connector/dashboard.html', context)
+
+
+# File Upload View
+
+@login_required
+def upload_file_view(request):
+    """Handle file uploads"""
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        folder_id = request.POST.get('folder')
+        
+        if not file:
+            messages.error(request, "No file was selected.")
+            return redirect('dashboard')
+        
+        # Check if user has enough storage
+        profile = request.user.profile
+        if file.size > profile.get_available_storage():
+            messages.error(request, "Not enough storage available.")
+            return redirect('dashboard')
+        
+        # Get the selected folder (if any)
+        folder = None
+        if folder_id:
+            try:
+                folder = request.user.folders.get(id=folder_id)
+            except:
+                messages.warning(request, "Selected folder not found.")
+        
+        # Upload file to S3
+        from .s3utils import S3Uploader
+        uploader = S3Uploader()
+        result = uploader.upload(file, file.name)
+        
+        if result['success']:
+            # Create File record in database
+            from .models import File
+            
+            # Determine file category based on content type
+            content_type = result['file_info']['content_type']
+            category = 'other'
+            if content_type.startswith('image/'):
+                category = 'image'
+            elif content_type.startswith('video/'):
+                category = 'video'
+            elif content_type.startswith('audio/'):
+                category = 'audio'
+            elif 'pdf' in content_type or 'document' in content_type or 'spreadsheet' in content_type:
+                category = 'document'
+            
+            # Create the file record
+            File.objects.create(
+                name=result['file_info']['key'].split('/')[-1],
+                original_name=file.name,
+                s3_key=result['file_info']['key'],
+                size=result['file_info']['size_bytes'],
+                content_type=content_type,
+                category=category,
+                owner=request.user,
+                folder=folder
+            )
+            
+            messages.success(request, f"File {file.name} uploaded successfully!")
+        else:
+            messages.error(request, f"Error uploading file: {result['message']}")
+        
+        return redirect('dashboard')
+    
+    # GET request - show upload form
+    folders = request.user.folders.all()
+    return render(request, 's3connector/upload.html', {'folders': folders})
+
+
+@login_required
+def file_list_view(request, category=None):
+    """List files, optionally filtered by category"""
+    files_query = request.user.files.all()
+    
+    if category and category != 'all':
+        files_query = files_query.filter(category=category)
+    
+    files = files_query.order_by('-uploaded_at')
+    
+    context = {
+        'files': files,
+        'category': category or 'all',
+        'categories': [choice[0] for choice in File.CATEGORY_CHOICES]
+    }
+    return render(request, 's3connector/file_list.html', context)
+
+@login_required
+def file_detail_view(request, file_id):
+    """View details of a specific file"""
+    try:
+        file = request.user.files.get(id=file_id)
+        context = {'file': file}
+        return render(request, 's3connector/file_detail.html', context)
+    except:
+        messages.error(request, "File not found.")
+        return redirect('file_list')
+
+@login_required
+def delete_file_view(request, file_id):
+    """Delete a file"""
+    try:
+        file = request.user.files.get(id=file_id)
+        
+        # Delete from S3
+        from .s3utils import delete_file_from_s3
+        s3_key = file.s3_key.split('/')[-1]  # Get just the filename without the folder
+        
+        if delete_file_from_s3(s3_key):
+            # Delete from database
+            file.delete()
+            messages.success(request, "File deleted successfully.")
+        else:
+            messages.error(request, "Error deleting file from storage.")
+            
+    except Exception as e:
+        messages.error(request, f"Error deleting file: {str(e)}")
+        
+    return redirect('file_list')
+
+@login_required
+def download_file_view(request, file_id):
+    """Generate download URL and redirect"""
+    try:
+        file = request.user.files.get(id=file_id)
+        download_url = file.get_download_url()
+        
+        if download_url:
+            return redirect(download_url)
+        else:
+            messages.error(request, "Error generating download link.")
+            return redirect('file_detail', file_id=file_id)
+    except:
+        messages.error(request, "File not found.")
+        return redirect('file_list')
