@@ -45,7 +45,6 @@ def logout_view(request):
     messages.info(request, "You have been logged out.")
     return redirect('login')
     
-
 # Dashboard Views
 @login_required
 def dashboard_view(request):
@@ -69,9 +68,7 @@ def dashboard_view(request):
     }
     return render(request, 's3connector/dashboard.html', context)
 
-
 # File Upload View
-
 @login_required
 def upload_file_view(request):
     """Handle file uploads"""
@@ -140,7 +137,6 @@ def upload_file_view(request):
     folders = request.user.folders.all()
     return render(request, 's3connector/upload.html', {'folders': folders})
 
-
 @login_required
 def file_list_view(request, category=None):
     """List files, optionally filtered by category"""
@@ -206,3 +202,82 @@ def download_file_view(request, file_id):
     except:
         messages.error(request, "File not found.")
         return redirect('file_list')
+    
+# Folder Management Views
+@login_required
+def create_folder_view(request):
+    """Create a new folder"""
+    if request.method == 'POST':
+        folder_name = request.POST.get('folder_name')
+        parent_id = request.POST.get('parent_folder')
+        
+        if not folder_name:
+            messages.error(request, "Please provide a folder name.")
+            return redirect('dashboard')
+        
+        # Get parent folder if specified
+        parent = None
+        if parent_id:
+            try:
+                parent = request.user.folders.get(id=parent_id)
+            except:
+                messages.warning(request, "Parent folder not found.")
+        
+        # Create the folder
+        try:
+            from .models import Folder
+            Folder.objects.create(
+                name=folder_name,
+                owner=request.user,
+                parent=parent
+            )
+            messages.success(request, f"Folder '{folder_name}' created successfully!")
+        except Exception as e:
+            messages.error(request, f"Error creating folder: {str(e)}")
+        
+        return redirect('dashboard')
+    
+    # GET request - show folder creation form
+    folders = request.user.folders.all()
+    return render(request, 's3connector/create_folder.html', {'folders': folders})
+
+@login_required
+def folder_view(request, folder_id):
+    """View contents of a folder"""
+    try:
+        folder = request.user.folders.get(id=folder_id)
+        files = folder.files.all().order_by('-uploaded_at')
+        subfolders = folder.subfolders.all().order_by('name')
+        
+        context = {
+            'folder': folder,
+            'files': files,
+            'subfolders': subfolders,
+        }
+        return render(request, 's3connector/folder.html', context)
+    except:
+        messages.error(request, "Folder not found.")
+        return redirect('dashboard')
+
+@login_required
+def delete_folder_view(request, folder_id):
+    """Delete a folder"""
+    try:
+        folder = request.user.folders.get(id=folder_id)
+        
+        # Check if folder has files
+        if folder.files.exists():
+            messages.error(request, "Cannot delete folder that contains files.")
+            return redirect('folder', folder_id=folder_id)
+        
+        # Check if folder has subfolders
+        if folder.subfolders.exists():
+            messages.error(request, "Cannot delete folder that contains subfolders.")
+            return redirect('folder', folder_id=folder_id)
+        
+        folder.delete()
+        messages.success(request, "Folder deleted successfully.")
+        return redirect('dashboard')
+    except:
+        messages.error(request, "Folder not found or cannot be deleted.")
+        return redirect('dashboard')
